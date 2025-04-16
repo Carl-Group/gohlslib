@@ -17,5 +17,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/bluenviron/gohlslib/v2 => github.com/Carl-Group/gohlslib/v2
+replace github.com/bluenviron/gohlslib/v2 => github.com/Carl-Group/gohlslib/v2 v2.1.4
 
