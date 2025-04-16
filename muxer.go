@@ -186,7 +186,7 @@ func (m *Muxer) Start() error {
 			"#EXTINF:6.000,\n" + m.prefix + "_subs2.vtt\n" +
 			"#EXT-X-ENDLIST\n"
 
-		err := os.WriteFile(subtitlesPath, []byte(subtitlePlaylist), 0644)
+		err = os.WriteFile(subtitlesPath, []byte(subtitlePlaylist), 0644)
 		if err != nil {
 			return fmt.Errorf("failed to write subtitles.m3u8: %w", err)
 		}
