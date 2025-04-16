@@ -1,4 +1,4 @@
-module github.com/Carl-Group/gohlslib v2.1.4
+module github.com/Carl-Group/gohlslib/v2 v2.1.4
 
 go 1.21.0
 
