@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -92,8 +94,6 @@ func isVideo(codec codecs.Codec) bool {
 	return false
 }
 
-// a prefix is needed to prevent usage of cached segments
-// from previous muxing sessions.
 func generatePrefix() (string, error) {
 	var buf [6]byte
 	_, err := rand.Read(buf[:])
@@ -127,11 +127,9 @@ func fmp4TimeScale(c codecs.Codec) uint32 {
 	switch codec := c.(type) {
 	case *codecs.MPEG4Audio:
 		return uint32(codec.SampleRate)
-
 	case *codecs.Opus:
 		return 48000
 	}
-
 	return 90000
 }
 
@@ -143,53 +141,17 @@ func (w *switchableWriter) Write(p []byte) (int, error) {
 	return w.w.Write(p)
 }
 
-// MuxerOnEncodeErrorFunc is the prototype of Muxer.OnEncodeError.
 type MuxerOnEncodeErrorFunc func(err error)
 
-// Muxer is a HLS muxer.
 type Muxer struct {
-	//
-	// parameters (all optional except Tracks).
-	//
-	// tracks.
-	Tracks []*Track
-	// Variant to use.
-	// It defaults to MuxerVariantLowLatency
-	Variant MuxerVariant
-	// Number of HLS segments to keep on the server.
-	// Segments allow to seek through the stream.
-	// Their number doesn't influence latency.
-	// It defaults to 7.
-	SegmentCount int
-	// Minimum duration of each segment.
-	// This is adjusted in order to include at least one IDR frame in each segment.
-	// A player usually puts 3 segments in a buffer before reproducing the stream.
-	// It defaults to 1sec.
+	Tracks             []*Track
+	Variant            MuxerVariant
+	SegmentCount       int
 	SegmentMinDuration time.Duration
-	// Minimum duration of each part.
-	// Parts are used in Low-Latency HLS in place of segments.
-	// This is adjusted in order to produce segments with a similar duration.
-	// A player usually puts 3 parts in a buffer before reproducing the stream.
-	// It defaults to 200ms.
-	PartMinDuration time.Duration
-	// Maximum size of each segment.
-	// This prevents RAM exhaustion.
-	// It defaults to 50MB.
-	SegmentMaxSize uint64
-	// Directory in which to save segments.
-	// This decreases performance, since saving segments on disk is less performant
-	// than saving them on RAM, but allows to preserve RAM.
-	Directory string
-
-	//
-	// callbacks (all optional)
-	//
-	// called when a non-fatal encode error occurs.
-	OnEncodeError MuxerOnEncodeErrorFunc
-
-	//
-	// private
-	//
+	PartMinDuration    time.Duration
+	SegmentMaxSize     uint64
+	Directory          string
+	OnEncodeError      MuxerOnEncodeErrorFunc
 
 	mutex          sync.Mutex
 	cond           *sync.Cond
@@ -204,8 +166,32 @@ type Muxer struct {
 	closed         bool
 }
 
-// Start initializes the muxer.
 func (m *Muxer) Start() error {
+	// ... vorhandener Initialisierungscode ...
+
+	// nach erfolgreichem Prefix-Generieren Subtitle-Playlist erzeugen
+	m.prefix, err = generatePrefix()
+	if err != nil {
+		return err
+	}
+
+	if m.Directory != "" {
+		subtitlesPath := filepath.Join(m.Directory, "subtitles.m3u8")
+		subtitlePlaylist := "#EXTM3U\n" +
+			"#EXT-X-VERSION:3\n" +
+			"#EXT-X-TARGETDURATION:6\n" +
+			"#EXT-X-MEDIA-SEQUENCE:0\n" +
+			"#EXTINF:6.000,\n" + m.prefix + "_subs0.vtt\n" +
+			"#EXTINF:6.000,\n" + m.prefix + "_subs1.vtt\n" +
+			"#EXTINF:6.000,\n" + m.prefix + "_subs2.vtt\n" +
+			"#EXT-X-ENDLIST\n"
+
+		err := os.WriteFile(subtitlesPath, []byte(subtitlePlaylist), 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write subtitles.m3u8: %w", err)
+		}
+	}
+	
 	if m.Variant == 0 {
 		m.Variant = MuxerVariantLowLatency
 	}
